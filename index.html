@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BudgetFlow — Tableau de bord</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#">
+        <span class="brand-mark">B</span>
+        <span>Budget<span class="brand-accent">Flow</span></span>
+      </a>
+
+      <p class="nav-caption">ESPACE FINANCIER</p>
+      <nav class="navigation">
+        <a href="#overview" class="nav-link active"><span>◈</span> Vue d'ensemble</a>
+        <a href="#transactions" class="nav-link"><span>⇄</span> Transactions</a>
+        <a href="#categories" class="nav-link"><span>▦</span> Catégories</a>
+        <a href="#annual" class="nav-link"><span>▤</span> Bilan annuel</a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-symbol">✦</div>
+        <strong>Votre budget, en un coup d'œil.</strong>
+        <p>Suivez vos finances et prenez de meilleures décisions.</p>
+        <span class="storage-status"><i></i> Sauvegarde locale activée</span>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="page-header" id="overview">
+        <div>
+          <p class="eyebrow">VOTRE ESPACE PERSONNEL</p>
+          <h1>Vue d'ensemble</h1>
+          <p class="subtitle">Bienvenue sur votre tableau de bord financier.</p>
+        </div>
+        <div class="header-actions">
+          <label class="year-control">
+            <span>Année</span>
+            <select id="yearSelect" aria-label="Choisir l'année"></select>
+          </label>
+          <button class="avatar" type="button" title="BudgetFlow">BF</button>
+        </div>
+      </header>
+
+      <section class="kpi-grid" aria-label="Résumé financier">
+        <article class="kpi-card">
+          <div class="kpi-top"><span>Revenus annuels</span><span class="kpi-icon income-icon">↙</span></div>
+          <div id="incomeTotal" class="kpi-value">0,00 €</div>
+          <div class="kpi-foot"><span class="status-pill green-pill">Entrées</span> sur l'année sélectionnée</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-top"><span>Dépenses annuelles</span><span class="kpi-icon expense-icon">↗</span></div>
+          <div id="expenseTotal" class="kpi-value">0,00 €</div>
+          <div class="kpi-foot"><span class="status-pill red-pill">Sorties</span> sur l'année sélectionnée</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-top"><span>Solde annuel</span><span class="kpi-icon balance-icon">€</span></div>
+          <div id="balanceTotal" class="kpi-value">0,00 €</div>
+          <div class="kpi-foot">Revenus moins dépenses</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-top"><span>Taux d'épargne</span><span class="kpi-icon savings-icon">↗</span></div>
+          <div id="savingsRate" class="kpi-value">—</div>
+          <div class="kpi-foot">Part des revenus conservée</div>
+        </article>
+      </section>
+
+      <section class="top-grid">
+        <article class="panel chart-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Évolution mensuelle</h2>
+              <p>Comparaison des revenus et des dépenses</p>
+            </div>
+            <div class="chart-legend">
+              <span><i class="legend-income"></i> Revenus</span>
+              <span><i class="legend-expense"></i> Dépenses</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="monthlyChart" aria-label="Graphique mensuel des revenus et dépenses"></canvas>
+          </div>
+          <div class="chart-footer">
+            <span>Janvier — Décembre</span>
+            <span id="chartYearLabel"></span>
+          </div>
+        </article>
+
+        <article class="panel form-panel">
+          <div class="panel-heading">
+            <div>
+              <h2 id="formTitle">Nouvelle transaction</h2>
+              <p>Enregistrez un mouvement financier</p>
+            </div>
+            <span class="heading-symbol">＋</span>
+          </div>
+          <form id="transactionForm">
+            <input type="hidden" id="transactionId">
+
+            <div class="type-switch">
+              <label><input type="radio" name="type" value="expense" checked><span>Dépense</span></label>
+              <label><input type="radio" name="type" value="income"><span>Revenu</span></label>
+            </div>
+
+            <label class="field">
+              <span>Montant (€)</span>
+              <input id="amount" type="number" min="0.01" step="0.01" placeholder="0,00" required>
+            </label>
+
+            <label class="field">
+              <span>Description</span>
+              <input id="description" type="text" maxlength="100" placeholder="Ex. Courses alimentaires" required>
+            </label>
+
+            <div class="form-row">
+              <label class="field">
+                <span>Catégorie</span>
+                <select id="category" required></select>
+              </label>
+              <label class="field">
+                <span>Date</span>
+                <input id="date" type="date" required>
+              </label>
+            </div>
+
+            <div class="form-buttons">
+              <button class="btn-primary" id="saveTransaction" type="submit">＋ Ajouter la transaction</button>
+              <button class="btn-secondary hidden" id="cancelEdit" type="button">Annuler</button>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="bottom-grid">
+        <article class="panel transactions-panel" id="transactions">
+          <div class="panel-heading">
+            <div>
+              <h2>Transactions récentes</h2>
+              <p id="transactionCount">Historique de l'année</p>
+            </div>
+            <button id="exportCsv" class="btn-secondary" type="button">Exporter CSV ↗</button>
+          </div>
+
+          <div class="table-tools">
+            <input id="searchInput" type="search" placeholder="⌕  Rechercher une transaction..." aria-label="Rechercher">
+            <select id="typeFilter" aria-label="Filtrer les transactions">
+              <option value="all">Tous les types</option>
+              <option value="expense">Dépenses</option>
+              <option value="income">Revenus</option>
+            </select>
+          </div>
+
+          <div class="table-scroll transactions-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>Date</th><th>Description</th><th>Catégorie</th><th>Montant</th><th>Type</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="transactionList"></tbody>
+            </table>
+            <p id="emptyTransactions" class="empty-state">Aucune transaction pour cette année.</p>
+          </div>
+        </article>
+
+        <article class="panel categories-panel" id="categories">
+          <div class="panel-heading">
+            <div>
+              <h2>Dépenses par catégorie</h2>
+              <p>Répartition annuelle</p>
+            </div>
+          </div>
+          <div class="category-total">
+            <span>Total des dépenses</span>
+            <strong id="categoryExpenseTotal">0,00 €</strong>
+          </div>
+          <div id="categoryBreakdown" class="category-breakdown"></div>
+
+          <div class="category-manager">
+            <h3>Personnaliser les catégories</h3>
+            <form id="categoryForm" class="category-form">
+              <input id="newCategory" type="text" maxlength="35" placeholder="Nom de catégorie" required>
+              <button class="btn-primary add-category-button" type="submit">Ajouter</button>
+            </form>
+            <div id="categoryList" class="category-list"></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel annual-panel" id="annual">
+        <div class="panel-heading">
+          <div>
+            <h2>Bilan annuel par catégorie</h2>
+            <p>Vue détaillée de toutes vos catégories, y compris celles à 0 €</p>
+          </div>
+          <span class="annual-year" id="annualYearLabel"></span>
+        </div>
+        <div class="table-scroll annual-scroll">
+          <table class="data-table annual-table">
+            <thead>
+              <tr><th>Catégorie</th><th>Nombre de dépenses</th><th>Total annuel</th><th>Part du total</th></tr>
+            </thead>
+            <tbody id="annualCategoryBody"></tbody>
+            <tfoot><tr><th>Total</th><th id="annualTransactionCount">0</th><th id="annualCategoryTotal">0,00 €</th><th id="annualShareTotal">100 %</th></tr></tfoot>
+          </table>
+        </div>
+      </section>
+
+      <footer class="page-footer">
+        <span>BudgetFlow · Vos finances, votre vision.</span>
+        <span>Les données sont enregistrées dans ce navigateur.</span>
+      </footer>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

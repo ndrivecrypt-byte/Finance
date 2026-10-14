@@ -1,7 +1,7 @@
 (()=>{'use strict';
 // 1) Remplacez ces deux valeurs par celles de Supabase > Project Settings > API.
 // Utilisez UNIQUEMENT la clé publique anon / publishable. Jamais service_role ou secret.
-const SUPABASE_URL = 'https://dgpupquqkclqhvnhatcy.supabase.co';
+const SUPABASE_URL = 'https://dgpupquqkclqhvhhatcy.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_hLQ_NaIzvWF3UKwRBRXLZQ_whQkw71y';
 const CLOUD_READY=!SUPABASE_URL.includes('VOTRE-PROJET')&&!SUPABASE_PUBLISHABLE_KEY.includes('VOTRE_CLE');
 const cloud=CLOUD_READY&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY):null;

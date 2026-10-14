@@ -230,7 +230,7 @@ function renderSchedules(){
  const nextDate=items.length?items[0].date:null;
  $('scheduleRows').innerHTML=items.length?items.map(s=>{
   const isNext=s.date===nextDate;
-  return `<div class="schedule-row${isNext?' schedule-row-next':''}"><div><strong>${escape(s.name)}</strong>${isNext?'<span class="schedule-next-label">Prochaine échéance</span>':''}<p class="muted">${escape(s.category)} · ${escape(s.date)} · ${s.repeat==='monthly'?'Mensuel':s.repeat==='yearly'?'Annuel':'Unique'}</p></div><div><strong class="schedule-price${isNext?' schedule-price-next':''}">${fmt(s.amount)}</strong><button class="btn secondary-btn" data-edit-schedule="${escape(s.id)}" type="button">Modifier</button><button class="btn secondary-btn" data-delete-schedule="${escape(s.id)}" type="button">Supprimer</button></div></div>`;
+  return `<div class="schedule-row${isNext?' schedule-row-next':''}"><div><strong>${escape(s.name)}</strong>${isNext?'<span class="schedule-next-label">Prochaine échéance</span>':''}<p class="muted">${escape(s.category)} · ${escape(s.date)} · ${s.repeat==='monthly'?'Mensuel':s.repeat==='yearly'?'Annuel':'Unique'}</p></div><div><strong class="schedule-price${isNext?' schedule-price-next':''}">${fmt(s.amount)}</strong><button class="btn secondary-btn" data-delete-schedule="${escape(s.id)}" type="button">Supprimer</button></div></div>`;
  }).join(''):'<p class="muted">Aucune échéance à venir.</p>';
  $('scheduleCategory').innerHTML=categories.map(c=>`<option value="${escape(c)}">${escape(c)}</option>`).join('');
 }
@@ -251,17 +251,9 @@ $('scheduleForm').addEventListener('submit',e=>{
  schedules.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),name,amount,date,originalDate:date,category:$('scheduleCategory').value,repeat:$('scheduleRepeat').value});save();$('scheduleForm').reset();$('scheduleDate').value=today();render();
 });
 $('scheduleRows').addEventListener('click',e=>{
- const edit=e.target.closest('[data-edit-schedule]');
- if(edit){
-  const s=schedules.find(x=>String(x.id)===edit.dataset.editSchedule);if(!s)return;
-  showPage('transactions');location.hash='transactions';
-  beginEdit({id:'schedule:'+s.id,amount:s.amount,description:s.name,category:s.category,date:s.date,type:'expense'});
-  message('Modification de l’échéance à venir.');return;
- }
  const b=e.target.closest('[data-delete-schedule]');if(!b)return;
- if(confirm('Supprimer cette échéance ?')){schedules=schedules.filter(s=>String(s.id)!==b.dataset.deleteSchedule);save();render()}
+ if(confirm('Supprimer cette échéance ?')){schedules=schedules.filter(s=>s.id!==b.dataset.deleteSchedule);save();render()}
 });
-
 document.querySelectorAll('input[name="type"]').forEach(input=>input.addEventListener('change',updateSavingType));
 $('scheduleDate').value=today();
 
@@ -312,71 +304,9 @@ $('clearDemo').addEventListener('click',()=>{
   if($('editingId').value.startsWith('demo-'+DEMO_MARK))reset();
   save();render();updateDemoStatus();
 });
-// Les dépenses futures sont des échéances, et ne comptent pas dans les dépenses avant leur date.
-// Le formulaire de transaction sert aussi à modifier une échéance existante.
-function beginEdit(t){
- $('editingId').value=String(t.id);
- $('amount').value=t.amount;$('description').value=t.description;$('date').value=t.date;
- const radio=document.querySelector(`input[name="type"][value="${t.type}"]`);
- if(radio)radio.checked=true;
- updateSavingType();
- if(t.type==='saving')$('savingGoalSelect').value=t.category;
- else $('category').value=t.category;
- $('formTitle').textContent=String(t.id).startsWith('schedule:')?'Modifier l’échéance':'Modifier la transaction';
- $('submitButton').textContent='Enregistrer les modifications';
- $('cancelEdit').classList.remove('hidden');
- $('transactionForm').scrollIntoView({behavior:'smooth',block:'center'});
- $('description').focus({preventScroll:true});
-}
-$('transactionForm').addEventListener('submit',e=>{
- e.preventDefault();
- const amount=Number($('amount').value),description=$('description').value.trim();
- const type=document.querySelector('input[name="type"]:checked')?.value;
- const category=type==='saving'?$('savingGoalSelect').value:$('category').value;
- const date=$('date').value,id=$('editingId').value;
- if(!(amount>0)||!Number.isFinite(amount)||!description||!category||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)){
-  message('Veuillez vérifier les informations saisies.',true);return;
- }
- const futureExpense=type==='expense'&&date>today();
- const values={amount,description,category,date,type};
- if(id.startsWith('schedule:')){
-  const sid=id.slice('schedule:'.length),i=schedules.findIndex(s=>String(s.id)===sid);
-  if(i<0){message('Échéance introuvable. Actualisez la page.',true);return}
-  const prior=schedules[i];
-  if(futureExpense){
-   schedules[i]={...prior,name:description,amount,category,date,originalDate:date};
-  }else{
-   // Une échéance devenue immédiate est enregistrée comme transaction.
-   schedules.splice(i,1);
-   transactions.push({id:'echeance-'+sid+'-'+date,scheduleId:sid,automatic:false,...values});
-  }
- }else if(id){
-  const i=transactions.findIndex(t=>String(t.id)===id);
-  if(i<0){message('Transaction introuvable. Actualisez la page.',true);return}
-  const prior=transactions[i];
-  if(futureExpense){
-   transactions.splice(i,1);
-   schedules.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),name:description,amount,category,date,originalDate:date,repeat:'none'});
-  }else transactions[i]={...prior,...values};
- }else if(futureExpense){
-  schedules.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),name:description,amount,category,date,originalDate:date,repeat:'none'});
- }else{
-  transactions.push({id:crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`,...values});
- }
- save();reset();render();
- message(futureExpense?'Échéance enregistrée dans « Échéancier à venir ».':id?'Modification enregistrée.':'Transaction ajoutée.');
-});
+$('transactionForm').addEventListener('submit',e=>{e.preventDefault();const amount=Number($('amount').value),description=$('description').value.trim(),category=document.querySelector('input[name="type"]:checked').value==='saving'?$('savingGoalSelect').value:$('category').value,date=$('date').value,type=document.querySelector('input[name="type"]:checked').value,id=$('editingId').value;if(!(amount>0)||!Number.isFinite(amount)||!description||!category||!/^\d{4}-\d{2}-\d{2}$/.test(date)){message('Veuillez vérifier les informations saisies.',true);return}if(id){const i=transactions.findIndex(t=>String(t.id)===id);if(i>=0)transactions[i]={...transactions[i],amount,description,category,date,type}}else transactions.push({id:typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`,amount,description,category,date,type});save();render();reset();message(id?'Transaction modifiée.':'Transaction ajoutée.')});
 $('cancelEdit').addEventListener('click',reset);
-$('transactionRows').addEventListener('click',e=>{
- const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');
- if(edit){const t=transactions.find(x=>String(x.id)===edit.dataset.edit);if(t)beginEdit(t);return}
- if(del){const t=transactions.find(x=>String(x.id)===del.dataset.delete);
-  if(t&&confirm(`Supprimer « ${t.description} » ?`)){
-   transactions=transactions.filter(x=>x!==t);save();render();updateDemoStatus();
-   if($('editingId').value===String(t.id))reset();
-  }
- }
-});
+$('transactionRows').addEventListener('click',e=>{const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(edit){const t=transactions.find(x=>String(x.id)===edit.dataset.edit);if(!t)return;$('editingId').value=t.id;$('amount').value=t.amount;$('description').value=t.description;$('category').value=t.category;$('date').value=t.date;document.querySelector(`input[name="type"][value="${t.type}"]`).checked=true;updateSavingType();if(t.type==='saving')$('savingGoalSelect').value=t.category;$('formTitle').textContent='Modifier la transaction';$('submitButton').textContent='Enregistrer';$('cancelEdit').classList.remove('hidden');$('transactionForm').scrollIntoView({behavior:'auto',block:'center'});}if(del){const t=transactions.find(x=>String(x.id)===del.dataset.delete);if(t&&confirm(`Supprimer « ${t.description} » ?`)){transactions=transactions.filter(x=>x!==t);save();render();updateDemoStatus();if($('editingId').value===String(t.id))reset()}}});
 $('searchTransactions').addEventListener('input',list);$('typeFilter').addEventListener('change',list);$('chartYear').addEventListener('change',requestChart);$('annualYear').addEventListener('change',annual);$('analysisYear').addEventListener('change',()=>{analysis();renderVisuals()});$('evolutionYear').addEventListener('change',()=>{$('analysisYear').value=$('evolutionYear').value;analysis();renderVisuals()});$('analysisMonth').addEventListener('change',()=>{analysis();renderVisuals()});
 $('visualCategory').addEventListener('change',renderVisuals);$('visualResetMonth').addEventListener('click',()=>{$('analysisMonth').value='all';analysis();renderVisuals()});
 $('chartViewBars').addEventListener('click',()=>{visualMode='bars';renderVisuals()});$('chartViewDonut').addEventListener('click',()=>{visualMode='donut';renderVisuals()});
@@ -400,8 +330,6 @@ function showPage(pageId){
 window.addEventListener('hashchange',()=>{if(transferDueSchedules())render();showPage(location.hash.slice(1))});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&transferDueSchedules())render()});
 window.addEventListener('focus',()=>{if(transferDueSchedules())render()});
-// Vérification régulière lorsque la page reste ouverte.
-setInterval(()=>{if(cloudEnabled&&transferDueSchedules())render()},60*1000);
 document.querySelectorAll('.quick-card').forEach(a=>a.addEventListener('click',()=>{
   if(location.hash===a.getAttribute('href'))showPage(location.hash.slice(1));
 }));

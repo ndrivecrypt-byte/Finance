@@ -6,6 +6,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_hLQ_NaIzvWF3UKwRBRXLZQ_whQkw71y';
 const CLOUD_READY=!SUPABASE_URL.includes('VOTRE-PROJET')&&!SUPABASE_PUBLISHABLE_KEY.includes('VOTRE_CLE');
 const cloud=CLOUD_READY&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY):null;
 let cloudUser=null,cloudEnabled=false,cloudChannel=null,cloudSaveTimer=null,cloudSaving=false,cloudDirty=false;
+let cloudBaseline=null,cloudConflict=false,cloudGeneration=0;
 const syncLabel=(s)=>{const el=document.getElementById('syncStatus');if(el)el.textContent=s};
 
 const $=id=>document.getElementById(id),K='budgetflow.transactions.v2',CK='budgetflow.categories.v2',SK='budgetflow.schedule.v1',GK='budgetflow.goals.v1';
@@ -18,15 +19,44 @@ const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const sum=(arr,type)=>arr.filter(t=>!type||t.type===type).reduce((n,t)=>n+Number(t.amount||0),0);
 const year=t=>Number(String(t.date).slice(0,4)),month=t=>Number(String(t.date).slice(5,7))-1;
-const save=()=>{if(!cloudEnabled)return;cloudDirty=true;syncLabel('Modifications en attente…');clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(flushCloud,220)};
+const save=()=>{if(!cloudEnabled)return;cloudDirty=true;syncLabel(cloudConflict?'Conflit de sauvegarde — rechargez après avoir conservé vos modifications':'Modifications en attente…');if(cloudConflict)return;clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(flushCloud,220)};
 const cloudSnapshot=()=>({transactions,categories,schedules,goals});
 async function flushCloud(){
- if(!cloudEnabled||!cloudUser||!cloudDirty||cloudSaving)return;
+ if(!cloudEnabled||!cloudUser||!cloudDirty||cloudSaving||cloudConflict)return;
  cloudSaving=true;cloudDirty=false;syncLabel('Synchronisation…');
  const snapshot=JSON.parse(JSON.stringify(cloudSnapshot()));
- try{const {error}=await cloud.from('budget_state').upsert({user_id:cloudUser.id,data:snapshot,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)throw error;syncLabel('Synchronisé ✓')}
- catch(err){cloudDirty=true;syncLabel('Erreur de synchronisation — réessayez');console.error('BudgetFlow cloud:',err)}
- finally{cloudSaving=false;if(cloudDirty&&cloudEnabled){clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(flushCloud,2500)}}
+ const expected=cloudBaseline===null?null:JSON.parse(JSON.stringify(cloudBaseline));
+ const generation=cloudGeneration,userId=cloudUser.id;
+ try{
+  let error,accepted=false;
+  if(expected===null){
+   // Une seule creation autorisee : ne jamais ecraser une ligne creee ailleurs.
+   const response=await cloud.from('budget_state').insert({user_id:userId,data:snapshot,updated_at:new Date().toISOString()});
+   error=response.error;
+   if(error&&error.code==='23505'){error=null;accepted=false}else accepted=!error;
+  }else{
+   const response=await cloud.rpc('budgetflow_save_if_unchanged',{expected_data:expected,new_data:snapshot});
+   error=response.error;accepted=response.data===true;
+  }
+  if(generation!==cloudGeneration)return;
+  if(error)throw error;
+  if(!accepted){
+   cloudConflict=true;cloudDirty=true;
+   syncLabel('Conflit : sauvegarde bloquee. Conservez vos modifications avant de recharger.');
+   return;
+  }
+  cloudBaseline=snapshot;
+  syncLabel(cloudDirty?'Modifications en attente…':'Synchronisé ✓');
+ }catch(err){
+  if(generation!==cloudGeneration)return;
+  // Ne pas boucler sur une erreur de RPC ou de droits.
+  cloudConflict=true;cloudDirty=true;
+  syncLabel('Sauvegarde bloquee — contactez le support avant de recharger');
+  console.error('BudgetFlow cloud:',err);
+ }finally{
+  cloudSaving=false;
+  if(cloudDirty&&cloudEnabled&&!cloudConflict){clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(flushCloud,220)}
+ }
 }
 function applyCloud(data){
  transactions=Array.isArray(data?.transactions)?data.transactions:[];
@@ -49,6 +79,8 @@ async function startCloudInternal(user){
   if(error)throw error;
   // Une nouvelle session commence vide : aucune démo ni anciennes données locales importées automatiquement.
   transactions=[];categories=defaults.slice();schedules=[];goals=[];
+  cloudBaseline=data?.data?JSON.parse(JSON.stringify(data.data)):null;
+  cloudConflict=false;cloudDirty=false;cloudGeneration++;
   cloudEnabled=true;
   if(data?.data)applyCloud(data.data);else{render();updateDemoStatus()}
   document.getElementById('authScreen').hidden=true;
@@ -58,11 +90,11 @@ async function startCloudInternal(user){
     .on('postgres_changes',{event:'*',schema:'public',table:'budget_state',filter:'user_id=eq.'+user.id},async()=>{
       if(cloudDirty||cloudSaving)return;
       const {data:latest,error:e}=await cloud.from('budget_state').select('data').eq('user_id',user.id).maybeSingle();
-      if(!e&&latest?.data){applyCloud(latest.data);syncLabel('Mis à jour en temps réel ✓')}
+      if(!e&&latest?.data&&!cloudDirty&&!cloudSaving){cloudBaseline=JSON.parse(JSON.stringify(latest.data));applyCloud(latest.data);syncLabel('Mis à jour en temps réel ✓')}
     }).subscribe();
  }catch(err){cloudEnabled=false;document.getElementById('authScreen').hidden=false;document.getElementById('budgetApp').hidden=true;document.getElementById('authMessage').textContent='Connexion aux données impossible : '+err.message;console.error(err)}
 }
-async function stopCloud(){cloudEnabled=false;cloudUser=null;cloudDirty=false;clearTimeout(cloudSaveTimer);if(cloudChannel){await cloud.removeChannel(cloudChannel);cloudChannel=null}document.getElementById('budgetApp').hidden=true;document.getElementById('authScreen').hidden=false;transactions=[];categories=defaults.slice();schedules=[];goals=[]}
+async function stopCloud(){cloudGeneration++;cloudBaseline=null;cloudConflict=false;cloudEnabled=false;cloudUser=null;cloudDirty=false;clearTimeout(cloudSaveTimer);if(cloudChannel){await cloud.removeChannel(cloudChannel);cloudChannel=null}document.getElementById('budgetApp').hidden=true;document.getElementById('authScreen').hidden=false;transactions=[];categories=defaults.slice();schedules=[];goals=[]}
 async function initializeCloud(){
  const authMessage=document.getElementById('authMessage');
  if(!cloud){authMessage.textContent='Configurez SUPABASE_URL et SUPABASE_PUBLISHABLE_KEY dans script.js, puis rechargez la page.';return}

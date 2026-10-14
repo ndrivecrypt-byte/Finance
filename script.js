@@ -263,7 +263,7 @@ scheduleCancel.addEventListener('click',resetScheduleForm);
 $('scheduleForm').addEventListener('submit',e=>{
  e.preventDefault();
  const name=$('scheduleName').value.trim(),amount=Number($('scheduleAmount').value),date=$('scheduleDate').value;
- if(!name||!Number.isFinite(amount)||!(amount>0)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(date))return;
+ if(!name||!Number.isFinite(amount)||!(amount>0)||!/^\d{4}-\d{2}-\d{2}$/.test(date))return;
  const values={name,amount,date,category:$('scheduleCategory').value,repeat:$('scheduleRepeat').value};
  if(editingScheduleId){
   const i=schedules.findIndex(x=>String(x.id)===String(editingScheduleId));

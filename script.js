@@ -35,7 +35,13 @@ function applyCloud(data){
  goals=Array.isArray(data?.goals)?data.goals:[];
  render();updateDemoStatus();
 }
-async function startCloud(user){
+let cloudStartPromise=null;
+function startCloud(user){
+ if(cloudStartPromise)return cloudStartPromise;
+ cloudStartPromise=startCloudInternal(user).finally(()=>{cloudStartPromise=null});
+ return cloudStartPromise;
+}
+async function startCloudInternal(user){
  cloudEnabled=false;cloudUser=user;syncLabel('Chargement de vos données…');
  if(cloudChannel){await cloud.removeChannel(cloudChannel);cloudChannel=null}
  try{
@@ -80,7 +86,7 @@ async function initializeCloud(){
   save();render();updateDemoStatus();alert('Importation préparée. Vérifiez l’indicateur « Synchronisé » avant de quitter la page.');
  });
  cloud.auth.onAuthStateChange((_event,session)=>{if(session?.user){if(!cloudEnabled||cloudUser?.id!==session.user.id)startCloud(session.user)}else if(cloudEnabled)stopCloud()});
- const {data:{session}}=await cloud.auth.getSession();if(session?.user)await startCloud(session.user);
+ const {data:{session}}=await cloud.auth.getSession();if(session?.user&&!cloudEnabled)await startCloud(session.user);
 }
 
 const message=(s,error=false)=>{const el=$('formMessage');el.textContent=s;el.style.color=error?'var(--red)':'var(--green)'};

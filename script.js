@@ -16,7 +16,7 @@ let editingScheduleId=null;
 let transactions=read(K,[]),categories=read(CK,defaults.slice());if(!categories.length)categories=defaults.slice();let schedules=read(SK,[]),goals=read(GK,[]);
 const euro=new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}),fmt=n=>euro.format(Number(n)||0);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+const today = () => {const parts = new Intl.DateTimeFormat('en-CA', {timeZone: 'Europe/Paris',year: 'numeric',month: '2-digit',day: '2-digit'}).formatToParts(new Date());const get = type => parts.find(p => p.type === type).value;return `${get('year')}-${get('month')}-${get('day')}`;};
 const sum=(arr,type)=>arr.filter(t=>!type||t.type===type).reduce((n,t)=>n+Number(t.amount||0),0);
 const year=t=>Number(String(t.date).slice(0,4)),month=t=>Number(String(t.date).slice(5,7))-1;
 const save=()=>{if(!cloudEnabled)return;cloudDirty=true;syncLabel(cloudConflict?'Conflit de sauvegarde — rechargez après avoir conservé vos modifications':'Modifications en attente…');if(cloudConflict)return;clearTimeout(cloudSaveTimer);cloudSaveTimer=setTimeout(flushCloud,220)};
